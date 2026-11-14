@@ -1,14 +1,13 @@
 import { PageHeader } from '@/components/page-header'
 import { SaleForm } from '@/components/sale-form'
-import { listCategories, listCustomers, listProducts, listSalespeople } from '@/lib/queries'
+import { listCategories, listCustomers, listProducts } from '@/lib/queries'
 
 export const dynamic = 'force-dynamic'
 
 export default async function NewSalePage() {
-  const [products, customers, salespeople, categories] = await Promise.all([
+  const [products, customers, categories] = await Promise.all([
     listProducts(),
     listCustomers(),
-    listSalespeople(),
     listCategories('penjualan'),
   ])
 
@@ -28,7 +27,6 @@ export default async function NewSalePage() {
           stock: p.stock,
         }))}
         customers={customers.map((c) => ({ value: c.id, label: c.name }))}
-        salespeople={salespeople.map((s) => ({ value: s.id, label: s.name }))}
         categories={categories.map((c) => ({ value: c.id, label: c.name }))}
       />
     </>

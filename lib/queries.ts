@@ -4,7 +4,6 @@ import { and, asc, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import {
   categories,
-  checkIns,
   customers,
   gallonLoans,
   payments,
@@ -50,10 +49,6 @@ export async function listCustomers() {
     .from(customers)
     .leftJoin(categories, eq(categories.id, customers.categoryId))
     .orderBy(asc(customers.name))
-}
-
-export async function listSalespeople() {
-  return db.select().from(salespeople).orderBy(asc(salespeople.name))
 }
 
 export async function listSales(stage?: SaleStage) {
@@ -109,6 +104,54 @@ export async function getSale(id: number) {
   return { ...sale, items, payments: paymentRows, returns: returnRows }
 }
 
+export type NotaFilter = { from?: string; to?: string; customerId?: number }
+
+const jakartaDate = sql`(${sales.createdAt} at time zone 'Asia/Jakarta')::date`
+
+export async function listNotas({ from, to, customerId }: NotaFilter) {
+  const itemSummary = sql<string>`coalesce((
+    select string_agg(${products.name} || ' x' || ${saleItems.qty}, ', ' order by ${saleItems.id})
+    from ${saleItems} left join ${products} on ${products.id} = ${saleItems.productId}
+    where ${saleItems.saleId} = ${sales.id}
+  ), '')`
+  return db
+    .select({
+      id: sales.id,
+      number: sales.number,
+      stage: sales.stage,
+      total: sales.total,
+      paid: sales.paid,
+      createdAt: sales.createdAt,
+      customerId: sales.customerId,
+      customerName: customers.name,
+      items: itemSummary,
+    })
+    .from(sales)
+    .leftJoin(customers, eq(customers.id, sales.customerId))
+    .where(
+      and(
+        from ? sql`${jakartaDate} >= ${from}::date` : undefined,
+        to ? sql`${jakartaDate} <= ${to}::date` : undefined,
+        customerId ? eq(sales.customerId, customerId) : undefined,
+      ),
+    )
+    .orderBy(desc(sales.createdAt))
+    .limit(500)
+}
+
+export async function getNotaForEdit(id: number) {
+  const [sale] = await db.select().from(sales).where(eq(sales.id, id))
+  if (!sale) return null
+  const [items, [{ returnCount }]] = await Promise.all([
+    db.select().from(saleItems).where(eq(saleItems.saleId, id)).orderBy(asc(saleItems.id)),
+    db
+      .select({ returnCount: sql<number>`count(*)::int` })
+      .from(saleReturns)
+      .where(eq(saleReturns.saleId, id)),
+  ])
+  return { sale, items, hasReturns: returnCount > 0 }
+}
+
 export async function getGallonSummary() {
   const [[total], [{ out }]] = await Promise.all([
     db.select({ value: settings.value }).from(settings).where(eq(settings.key, 'gallon_total')),
@@ -128,46 +171,6 @@ export async function listGallonLoans(active: boolean) {
     .where(active ? isNull(gallonLoans.returnedAt) : sql`${gallonLoans.returnedAt} is not null`)
     .orderBy(active ? sql`${gallonLoans.dueDate} asc nulls last` : desc(gallonLoans.returnedAt))
     .limit(200)
-}
-
-export async function getTeamOverview() {
-  const period = currentPeriod()
-  const [people, monthSales, targets, recentCheckIns] = await Promise.all([
-    listSalespeople(),
-    db
-      .select({
-        salespersonId: sales.salespersonId,
-        total: sql<number>`coalesce(sum(${sales.total}), 0)::int`,
-      })
-      .from(sales)
-      .where(and(inArray(sales.stage, invoicedStages), inPeriod(period)))
-      .groupBy(sales.salespersonId),
-    db.select().from(salesTargets).where(eq(salesTargets.period, period)),
-    db
-      .select({
-        checkIn: checkIns,
-        salespersonName: salespeople.name,
-        customerName: customers.name,
-      })
-      .from(checkIns)
-      .leftJoin(salespeople, eq(salespeople.id, checkIns.salespersonId))
-      .leftJoin(customers, eq(customers.id, checkIns.customerId))
-      .orderBy(desc(checkIns.createdAt))
-      .limit(20),
-  ])
-
-  const storeTotal = monthSales.reduce((sum, r) => sum + r.total, 0)
-  const storeTarget = targets.find((t) => t.salespersonId === null)?.amount ?? 0
-  const rows = people.map((p) => {
-    const total = monthSales.find((s) => s.salespersonId === p.id)?.total ?? 0
-    return {
-      ...p,
-      monthSales: total,
-      commission: Math.round((total * Number(p.commissionPercent)) / 100),
-      target: targets.find((t) => t.salespersonId === p.id)?.amount ?? 0,
-    }
-  })
-  return { period, storeTotal, storeTarget, rows, recentCheckIns }
 }
 
 export async function getDashboard() {

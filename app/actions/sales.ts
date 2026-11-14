@@ -88,6 +88,132 @@ export async function createSale(fd: FormData) {
   })
 }
 
+const stockDeductedStages: SaleStage[] = ['dikirim', 'faktur', 'lunas']
+
+function parseNotaDate(fd: FormData) {
+  const raw = fd.get('date')
+  if (raw === null || raw === '') return null
+  if (typeof raw !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new ValidationError('Tanggal nota tidak valid')
+  const date = new Date(`${raw}T12:00:00+07:00`)
+  if (Number.isNaN(date.getTime())) throw new ValidationError('Tanggal nota tidak valid')
+  return date
+}
+
+export async function updateSale(fd: FormData) {
+  return run(async () => {
+    const id = int(fd, 'id', { min: 1 })!
+    const customerId = int(fd, 'customerId', { min: 1, label: 'Pelanggan' })!
+    const categoryId = int(fd, 'categoryId', { required: false, min: 1 })
+    const discount = int(fd, 'discount', { required: false, label: 'Potongan' }) ?? 0
+    const notes = text(fd, 'notes', { max: 500 })
+    const createdAt = parseNotaDate(fd)
+    const items = parseItems(fd.get('items'))
+
+    let number = ''
+    await db.transaction(async (tx) => {
+      const [sale] = await tx.select().from(sales).where(eq(sales.id, id)).for('update')
+      if (!sale) throw new ValidationError('Nota tidak ditemukan')
+      number = sale.number
+
+      const [{ returnCount }] = await tx
+        .select({ returnCount: sql<number>`count(*)::int` })
+        .from(saleReturns)
+        .where(eq(saleReturns.saleId, id))
+      if (returnCount > 0) throw new ValidationError('Nota yang sudah ada retur tidak bisa diubah')
+
+      const oldItems = await tx.select().from(saleItems).where(eq(saleItems.saleId, id))
+      const productRows = await tx
+        .select()
+        .from(products)
+        .where(inArray(products.id, [...items.keys()]))
+      if (productRows.length !== items.size) throw new ValidationError('Ada barang yang tidak ditemukan')
+
+      const lines = productRows.map((p) => {
+        const previous = oldItems.find((i) => i.productId === p.id)
+        return {
+          productId: p.id,
+          qty: items.get(p.id)!,
+          price: previous?.price ?? p.price,
+          discountPercent: previous?.discountPercent ?? p.discountPercent,
+        }
+      })
+      const subtotal = lines.reduce((sum, l) => sum + netPrice(l.price, l.discountPercent) * l.qty, 0)
+      if (discount > subtotal) throw new ValidationError('Potongan melebihi subtotal')
+      const total = subtotal - discount
+      if (total < sale.paid) throw new ValidationError('Total nota tidak boleh kurang dari yang sudah dibayar')
+
+      if (stockDeductedStages.includes(sale.stage)) {
+        const deltas = new Map<number, number>()
+        for (const item of oldItems) deltas.set(item.productId, (deltas.get(item.productId) ?? 0) - item.qty)
+        for (const line of lines) deltas.set(line.productId, (deltas.get(line.productId) ?? 0) + line.qty)
+        for (const [productId, extra] of deltas) {
+          if (extra === 0) continue
+          const updated = await tx
+            .update(products)
+            .set({ stock: sql`${products.stock} - ${extra}` })
+            .where(and(eq(products.id, productId), sql`${products.stock} - ${extra} >= 0`))
+            .returning({ id: products.id })
+          if (updated.length === 0) throw new ValidationError('Stok tidak cukup untuk perubahan nota')
+        }
+      }
+
+      await tx.delete(saleItems).where(eq(saleItems.saleId, id))
+      await tx.insert(saleItems).values(lines.map((l) => ({ ...l, saleId: id })))
+
+      const stage: SaleStage =
+        sale.stage === 'faktur' || sale.stage === 'lunas' ? (sale.paid >= total ? 'lunas' : 'faktur') : sale.stage
+      await tx
+        .update(sales)
+        .set({
+          customerId,
+          categoryId,
+          subtotal,
+          discount,
+          total,
+          notes,
+          stage,
+          ...(createdAt ? { createdAt } : {}),
+        })
+        .where(eq(sales.id, id))
+    })
+
+    revalidatePath('/', 'layout')
+    return `Nota ${number} diperbarui`
+  })
+}
+
+export async function deleteSale(fd: FormData) {
+  return run(async () => {
+    const id = int(fd, 'id', { min: 1 })!
+    let number = ''
+    await db.transaction(async (tx) => {
+      const [sale] = await tx.select().from(sales).where(eq(sales.id, id)).for('update')
+      if (!sale) throw new ValidationError('Nota tidak ditemukan')
+      number = sale.number
+
+      if (stockDeductedStages.includes(sale.stage)) {
+        const items = await tx.select().from(saleItems).where(eq(saleItems.saleId, id))
+        for (const item of items) {
+          const remaining = item.qty - item.returnedQty
+          if (remaining <= 0) continue
+          await tx
+            .update(products)
+            .set({ stock: sql`${products.stock} + ${remaining}` })
+            .where(eq(products.id, item.productId))
+        }
+      }
+
+      await tx.delete(payments).where(eq(payments.saleId, id))
+      await tx.delete(saleReturns).where(eq(saleReturns.saleId, id))
+      await tx.delete(saleItems).where(eq(saleItems.saleId, id))
+      await tx.delete(sales).where(eq(sales.id, id))
+    })
+
+    revalidatePath('/', 'layout')
+    return `Nota ${number} dihapus`
+  })
+}
+
 const transitions: Record<string, SaleStage[]> = {
   pesanan: ['penawaran'],
   dikirim: ['pesanan'],

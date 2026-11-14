@@ -1,5 +1,6 @@
-import { Pencil, Plus } from 'lucide-react'
-import { saveCustomer } from '@/app/actions/customers'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { deleteCustomer, saveCustomer } from '@/app/actions/customers'
+import { ActionButton } from '@/components/action-button'
 import { Field, SelectField, TextareaField } from '@/components/fields'
 import { FormDialog } from '@/components/form-dialog'
 import { Empty, PageHeader } from '@/components/page-header'
@@ -67,7 +68,7 @@ export default async function CustomersPage() {
                 <TableHead className="hidden sm:table-cell">Kontak</TableHead>
                 <TableHead>Kategori</TableHead>
                 <TableHead className="text-right">Galon dipinjam</TableHead>
-                <TableHead className="w-12">
+                <TableHead className="w-20">
                   <span className="sr-only">Aksi</span>
                 </TableHead>
               </TableRow>
@@ -82,7 +83,8 @@ export default async function CustomersPage() {
                   <TableCell className="hidden text-muted-foreground sm:table-cell">{c.phone ?? '-'}</TableCell>
                   <TableCell>{c.categoryName ? <Badge variant="secondary">{c.categoryName}</Badge> : '-'}</TableCell>
                   <TableCell className="text-right tabular-nums">{c.gallonsOut}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
                     <FormDialog
                       title="Ubah pelanggan"
                       trigger={
@@ -97,6 +99,17 @@ export default async function CustomersPage() {
                     >
                       <CustomerFields customer={c} categories={categories} />
                     </FormDialog>
+                    <ActionButton
+                      action={deleteCustomer}
+                      fields={{ id: c.id }}
+                      variant="ghost"
+                      size="xs"
+                      confirm={`Hapus pelanggan ${c.name}?`}
+                      label={`Hapus ${c.name}`}
+                    >
+                      <Trash2 aria-hidden="true" className="text-destructive" />
+                    </ActionButton>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

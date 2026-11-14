@@ -3,7 +3,7 @@
 import { eq, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/lib/db'
-import { categories, customers, gallonLoans, settings } from '@/lib/db/schema'
+import { categories, customers, gallonLoans, sales, settings } from '@/lib/db/schema'
 import { int, run, text, ValidationError } from '@/lib/validation'
 
 export async function saveCustomer(fd: FormData) {
@@ -19,6 +19,33 @@ export async function saveCustomer(fd: FormData) {
     else await db.insert(customers).values(values)
     revalidatePath('/', 'layout')
     return id ? 'Pelanggan diperbarui' : 'Pelanggan ditambahkan'
+  })
+}
+
+export async function deleteCustomer(fd: FormData) {
+  return run(async () => {
+    const id = int(fd, 'id', { min: 1 })!
+    await db.transaction(async (tx) => {
+      const [{ gallonsOut }] = await tx
+        .select({ gallonsOut: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)::int` })
+        .from(gallonLoans)
+        .where(eq(gallonLoans.customerId, id))
+      if (gallonsOut > 0) {
+        throw new ValidationError(`Pelanggan masih meminjam ${gallonsOut} galon. Catat pengembalian dulu.`)
+      }
+      const [{ notaCount }] = await tx
+        .select({ notaCount: sql<number>`count(*)::int` })
+        .from(sales)
+        .where(eq(sales.customerId, id))
+      if (notaCount > 0) {
+        throw new ValidationError(`Pelanggan masih memiliki ${notaCount} nota. Hapus notanya dulu.`)
+      }
+      await tx.delete(gallonLoans).where(eq(gallonLoans.customerId, id))
+      const deleted = await tx.delete(customers).where(eq(customers.id, id)).returning({ id: customers.id })
+      if (deleted.length === 0) throw new ValidationError('Pelanggan tidak ditemukan')
+    })
+    revalidatePath('/', 'layout')
+    return 'Pelanggan dihapus'
   })
 }
 

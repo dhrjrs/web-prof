@@ -38,6 +38,19 @@ export async function saveProduct(fd: FormData) {
 export async function adjustStock(fd: FormData) {
   return run(async () => {
     const id = int(fd, 'id', { min: 1 })!
+
+    if (fd.get('mode') === 'atur') {
+      const stock = int(fd, 'qty', { min: 0, max: 1_000_000, label: 'Stok baru' })!
+      const updated = await db
+        .update(products)
+        .set({ stock })
+        .where(eq(products.id, id))
+        .returning({ id: products.id })
+      if (updated.length === 0) throw new ValidationError('Produk tidak ditemukan')
+      revalidatePath('/', 'layout')
+      return `Stok diubah menjadi ${stock}`
+    }
+
     const mode = fd.get('mode') === 'keluar' ? -1 : 1
     const qty = int(fd, 'qty', { min: 1, max: 100_000, label: 'Jumlah' })!
     const delta = qty * mode
