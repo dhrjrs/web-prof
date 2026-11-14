@@ -6,9 +6,9 @@ import {
   Boxes,
   Droplets,
   LayoutDashboard,
+  NotebookText,
   ReceiptText,
   Settings,
-  UserRoundCheck,
   Users,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -19,7 +19,7 @@ const links = [
   { href: '/stok', label: 'Stok & Harga', icon: Boxes },
   { href: '/galon', label: 'Pinjam Galon', icon: Droplets },
   { href: '/pelanggan', label: 'Pelanggan', icon: Users },
-  { href: '/tim', label: 'Tim Penjual', icon: UserRoundCheck },
+  { href: '/nota', label: 'Nota', icon: NotebookText },
   { href: '/pengaturan', label: 'Pengaturan', icon: Settings },
 ]
 

@@ -4,7 +4,7 @@ import { useActionState, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { createSale } from '@/app/actions/sales'
+import { createSale, updateSale } from '@/app/actions/sales'
 import { Field, NativeSelect, SelectField, TextareaField } from '@/components/fields'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,34 +16,56 @@ type Product = { id: number; name: string; unit: string; price: number; discount
 type Option = { value: number; label: string }
 type Line = { key: number; productId: string; qty: string }
 
+export type SaleFormInitial = {
+  id: number
+  customerId: number
+  categoryId: number | null
+  discount: number
+  notes: string | null
+  date: string
+  items: { productId: number; qty: number; price: number; discountPercent: number }[]
+}
+
 export function SaleForm({
   products,
   customers,
-  salespeople,
   categories,
+  initial,
 }: {
   products: Product[]
   customers: Option[]
-  salespeople: Option[]
   categories: Option[]
+  initial?: SaleFormInitial
 }) {
   const router = useRouter()
-  const [lines, setLines] = useState<Line[]>([{ key: 1, productId: '', qty: '1' }])
-  const [discount, setDiscount] = useState('0')
+  const isEdit = Boolean(initial)
+  const [lines, setLines] = useState<Line[]>(
+    initial?.items.length
+      ? initial.items.map((item, i) => ({ key: i + 1, productId: String(item.productId), qty: String(item.qty) }))
+      : [{ key: 1, productId: '', qty: '1' }],
+  )
+  const [discount, setDiscount] = useState(String(initial?.discount ?? 0))
 
   const [state, formAction, pending] = useActionState<ActionResult, FormData>(async (_prev, fd) => {
-    const result = await createSale(fd)
+    const result = await (isEdit ? updateSale(fd) : createSale(fd))
     if (result.ok) {
       toast.success(result.message)
-      router.push('/penjualan')
+      router.push(isEdit ? '/nota' : '/penjualan')
     }
     return result
   }, {})
 
+  function priceOf(productId: string) {
+    const kept = initial?.items.find((i) => String(i.productId) === productId)
+    if (kept) return netPrice(kept.price, kept.discountPercent)
+    const p = products.find((x) => String(x.id) === productId)
+    return p ? netPrice(p.price, p.discountPercent) : null
+  }
+
   const subtotal = lines.reduce((sum, l) => {
-    const p = products.find((x) => String(x.id) === l.productId)
+    const unit = priceOf(l.productId)
     const qty = Number(l.qty)
-    return p && Number.isInteger(qty) && qty > 0 ? sum + netPrice(p.price, p.discountPercent) * qty : sum
+    return unit !== null && Number.isInteger(qty) && qty > 0 ? sum + unit * qty : sum
   }, 0)
   const total = Math.max(0, subtotal - (Number(discount) || 0))
   const items = lines
@@ -57,20 +79,37 @@ export function SaleForm({
   return (
     <form action={formAction} className="flex max-w-3xl flex-col gap-6">
       <input type="hidden" name="items" value={JSON.stringify(items)} />
+      {initial ? <input type="hidden" name="id" value={initial.id} /> : null}
 
       <div className="grid gap-4 rounded-xl border bg-card p-4 sm:grid-cols-2">
-        <SelectField label="Pelanggan" name="customerId" options={customers} placeholder="Pilih pelanggan" required />
-        <SelectField label="Penjual" name="salespersonId" options={salespeople} placeholder="Tanpa penjual" />
-        <SelectField label="Kategori penjualan" name="categoryId" options={categories} placeholder="Tanpa kategori" />
         <SelectField
-          label="Simpan sebagai"
-          name="stage"
-          options={[
-            { value: 'penawaran', label: 'Penawaran' },
-            { value: 'pesanan', label: 'Pesanan' },
-          ]}
-          defaultValue="pesanan"
+          label="Pelanggan"
+          name="customerId"
+          options={customers}
+          placeholder="Pilih pelanggan"
+          defaultValue={initial?.customerId ?? ''}
+          required
         />
+        <SelectField
+          label="Kategori penjualan"
+          name="categoryId"
+          options={categories}
+          placeholder="Tanpa kategori"
+          defaultValue={initial?.categoryId ?? ''}
+        />
+        {initial ? (
+          <Field label="Tanggal nota" name="date" type="date" defaultValue={initial.date} required />
+        ) : (
+          <SelectField
+            label="Simpan sebagai"
+            name="stage"
+            options={[
+              { value: 'penawaran', label: 'Penawaran' },
+              { value: 'pesanan', label: 'Pesanan' },
+            ]}
+            defaultValue="pesanan"
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
@@ -90,6 +129,7 @@ export function SaleForm({
         <div className="flex flex-col gap-3">
           {lines.map((line, index) => {
             const p = products.find((x) => String(x.id) === line.productId)
+            const unit = priceOf(line.productId)
             return (
               <div key={line.key} className="flex flex-wrap items-end gap-2 border-b pb-3 last:border-b-0 last:pb-0">
                 <div className="flex min-w-48 flex-1 flex-col gap-1.5">
@@ -120,9 +160,9 @@ export function SaleForm({
                   />
                 </div>
                 <div className="flex w-32 flex-col items-end gap-1 pb-1.5 text-sm tabular-nums">
-                  {p ? (
+                  {p && unit !== null ? (
                     <>
-                      <span>{rupiah(netPrice(p.price, p.discountPercent) * (Number(line.qty) || 0))}</span>
+                      <span>{rupiah(unit * (Number(line.qty) || 0))}</span>
                       {p.discountPercent > 0 ? (
                         <span className="text-xs text-primary">diskon {p.discountPercent}%</span>
                       ) : null}
@@ -157,7 +197,7 @@ export function SaleForm({
           value={discount}
           onChange={(e) => setDiscount(e.target.value)}
         />
-        <TextareaField label="Catatan" name="notes" maxLength={500} />
+        <TextareaField label="Catatan" name="notes" maxLength={500} defaultValue={initial?.notes ?? ''} />
         <dl className="flex flex-col gap-1 text-sm sm:col-span-2">
           <div className="flex justify-between">
             <dt className="text-muted-foreground">Subtotal</dt>
@@ -177,7 +217,7 @@ export function SaleForm({
       ) : null}
       <div>
         <Button type="submit" disabled={pending}>
-          {pending ? 'Menyimpan...' : 'Simpan transaksi'}
+          {pending ? 'Menyimpan...' : isEdit ? 'Simpan perubahan nota' : 'Simpan transaksi'}
         </Button>
       </div>
     </form>

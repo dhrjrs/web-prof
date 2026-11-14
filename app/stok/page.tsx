@@ -128,11 +128,20 @@ export default async function StockPage() {
                             label="Jenis"
                             name="mode"
                             options={[
-                              { value: 'masuk', label: 'Stok masuk' },
-                              { value: 'keluar', label: 'Stok keluar / penyesuaian' },
+                              { value: 'atur', label: 'Ubah stok menjadi' },
+                              { value: 'masuk', label: 'Stok masuk (tambah)' },
+                              { value: 'keluar', label: 'Stok keluar (kurangi)' },
                             ]}
                           />
-                          <Field label="Jumlah" name="qty" type="number" min={1} defaultValue={1} required />
+                          <Field
+                            label="Jumlah"
+                            name="qty"
+                            type="number"
+                            min={0}
+                            defaultValue={p.stock}
+                            hint="Untuk 'Ubah stok menjadi', isi jumlah stok akhir yang benar."
+                            required
+                          />
                         </FormDialog>
                         <FormDialog
                           title="Ubah produk"
