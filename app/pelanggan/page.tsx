@@ -1,0 +1,109 @@
+import { Pencil, Plus } from 'lucide-react'
+import { saveCustomer } from '@/app/actions/customers'
+import { Field, SelectField, TextareaField } from '@/components/fields'
+import { FormDialog } from '@/components/form-dialog'
+import { Empty, PageHeader } from '@/components/page-header'
+import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { listCategories, listCustomers } from '@/lib/queries'
+
+export const dynamic = 'force-dynamic'
+
+type Customer = Awaited<ReturnType<typeof listCustomers>>[number]
+
+function CustomerFields({ customer, categories }: { customer?: Customer; categories: { value: number; label: string }[] }) {
+  return (
+    <>
+      {customer ? <input type="hidden" name="id" value={customer.id} /> : null}
+      <Field label="Nama" name="name" defaultValue={customer?.name} required />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="No. HP" name="phone" type="tel" defaultValue={customer?.phone ?? ''} maxLength={30} />
+        <SelectField
+          label="Kategori"
+          name="categoryId"
+          placeholder="Tanpa kategori"
+          options={categories}
+          defaultValue={customer?.categoryId ?? ''}
+        />
+      </div>
+      <TextareaField label="Alamat" name="address" defaultValue={customer?.address ?? ''} maxLength={300} />
+    </>
+  )
+}
+
+export default async function CustomersPage() {
+  const [rows, cats] = await Promise.all([listCustomers(), listCategories('pelanggan')])
+  const categories = cats.map((c) => ({ value: c.id, label: c.name }))
+
+  return (
+    <>
+      <PageHeader
+        title="Pelanggan"
+        description={`${rows.length} pelanggan terdaftar`}
+        actions={
+          <FormDialog
+            title="Tambah pelanggan"
+            trigger={
+              <>
+                <Plus aria-hidden="true" />
+                Pelanggan
+              </>
+            }
+            action={saveCustomer}
+          >
+            <CustomerFields categories={categories} />
+          </FormDialog>
+        }
+      />
+
+      <div className="rounded-xl border bg-card">
+        {rows.length === 0 ? (
+          <Empty>Belum ada pelanggan.</Empty>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nama</TableHead>
+                <TableHead className="hidden sm:table-cell">Kontak</TableHead>
+                <TableHead>Kategori</TableHead>
+                <TableHead className="text-right">Galon dipinjam</TableHead>
+                <TableHead className="w-12">
+                  <span className="sr-only">Aksi</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <span className="block">{c.name}</span>
+                    {c.address ? <span className="text-xs text-muted-foreground">{c.address}</span> : null}
+                  </TableCell>
+                  <TableCell className="hidden text-muted-foreground sm:table-cell">{c.phone ?? '-'}</TableCell>
+                  <TableCell>{c.categoryName ? <Badge variant="secondary">{c.categoryName}</Badge> : '-'}</TableCell>
+                  <TableCell className="text-right tabular-nums">{c.gallonsOut}</TableCell>
+                  <TableCell className="text-right">
+                    <FormDialog
+                      title="Ubah pelanggan"
+                      trigger={
+                        <>
+                          <Pencil aria-hidden="true" />
+                          <span className="sr-only">Ubah {c.name}</span>
+                        </>
+                      }
+                      triggerVariant="ghost"
+                      triggerSize="xs"
+                      action={saveCustomer}
+                    >
+                      <CustomerFields customer={c} categories={categories} />
+                    </FormDialog>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+    </>
+  )
+}
