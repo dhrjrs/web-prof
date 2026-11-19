@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   Boxes,
   Droplets,
+  FileCode2,
   LayoutDashboard,
   NotebookText,
   ReceiptText,
@@ -20,6 +21,7 @@ const links = [
   { href: '/galon', label: 'Pinjam Galon', icon: Droplets },
   { href: '/pelanggan', label: 'Pelanggan', icon: Users },
   { href: '/nota', label: 'Nota', icon: NotebookText },
+  { href: '/pajak', label: 'Faktur Pajak', icon: FileCode2 },
   { href: '/pengaturan', label: 'Pengaturan', icon: Settings },
 ]
 

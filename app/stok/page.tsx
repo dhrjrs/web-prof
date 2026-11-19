@@ -1,5 +1,4 @@
 import { ArrowDownUp, Pencil, Plus } from 'lucide-react'
-import { adjustStock, saveProduct } from '@/app/actions/products'
 import { Field, SelectField } from '@/components/fields'
 import { FormDialog } from '@/components/form-dialog'
 import { Empty, PageHeader } from '@/components/page-header'
@@ -59,7 +58,7 @@ export default async function StockPage() {
                 Produk
               </>
             }
-            action={saveProduct}
+            endpoint="/api/products"
           >
             <ProductFields />
           </FormDialog>
@@ -121,7 +120,8 @@ export default async function StockPage() {
                           }
                           triggerVariant="ghost"
                           triggerSize="xs"
-                          action={adjustStock}
+                          endpoint="/api/products/:id/stock"
+                          method="PATCH"
                         >
                           <input type="hidden" name="id" value={p.id} />
                           <SelectField
@@ -154,7 +154,8 @@ export default async function StockPage() {
                           }
                           triggerVariant="ghost"
                           triggerSize="xs"
-                          action={saveProduct}
+                          endpoint="/api/products/:id"
+                          method="PUT"
                         >
                           <ProductFields product={p} />
                         </FormDialog>

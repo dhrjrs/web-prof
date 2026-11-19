@@ -1,22 +1,19 @@
-import {
-  date,
-  integer,
-  numeric,
-  pgTable,
-  serial,
-  text,
-  timestamp,
-} from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
-export const categories = pgTable('categories', {
-  id: serial('id').primaryKey(),
+const createdAt = (name = 'created_at') => integer(name, { mode: 'timestamp_ms' })
+  .notNull()
+  .default(sql`(CAST(strftime('%s', 'now') AS INTEGER) * 1000)`)
+
+export const categories = sqliteTable('categories', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
   type: text('type').$type<'pelanggan' | 'penjualan'>().notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
 })
 
-export const products = pgTable('products', {
-  id: serial('id').primaryKey(),
+export const products = sqliteTable('products', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   sku: text('sku').notNull().unique(),
   name: text('name').notNull(),
   unit: text('unit').notNull().default('pcs'),
@@ -25,32 +22,33 @@ export const products = pgTable('products', {
   stock: integer('stock').notNull().default(0),
   minStock: integer('min_stock').notNull().default(0),
   categoryId: integer('category_id'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
 })
 
-export const customers = pgTable('customers', {
-  id: serial('id').primaryKey(),
+export const customers = sqliteTable('customers', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
   phone: text('phone'),
   address: text('address'),
+  nik: text('nik'),
+  npwp: text('npwp'),
+  email: text('email'),
   categoryId: integer('category_id'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
 })
 
-export const salespeople = pgTable('salespeople', {
-  id: serial('id').primaryKey(),
+export const salespeople = sqliteTable('salespeople', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
   phone: text('phone'),
-  commissionPercent: numeric('commission_percent', { precision: 5, scale: 2 })
-    .notNull()
-    .default('0'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  commissionPercent: real('commission_percent').notNull().default(0),
+  createdAt: createdAt(),
 })
 
 export type SaleStage = 'penawaran' | 'pesanan' | 'dikirim' | 'faktur' | 'lunas' | 'batal'
 
-export const sales = pgTable('sales', {
-  id: serial('id').primaryKey(),
+export const sales = sqliteTable('sales', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   number: text('number').notNull().unique(),
   stage: text('stage').$type<SaleStage>().notNull().default('penawaran'),
   customerId: integer('customer_id').notNull(),
@@ -61,13 +59,13 @@ export const sales = pgTable('sales', {
   total: integer('total').notNull().default(0),
   paid: integer('paid').notNull().default(0),
   notes: text('notes'),
-  shippedAt: timestamp('shipped_at', { withTimezone: true }),
-  invoicedAt: timestamp('invoiced_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  shippedAt: integer('shipped_at', { mode: 'timestamp_ms' }),
+  invoicedAt: integer('invoiced_at', { mode: 'timestamp_ms' }),
+  createdAt: createdAt(),
 })
 
-export const saleItems = pgTable('sale_items', {
-  id: serial('id').primaryKey(),
+export const saleItems = sqliteTable('sale_items', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   saleId: integer('sale_id').notNull(),
   productId: integer('product_id').notNull(),
   qty: integer('qty').notNull(),
@@ -76,56 +74,56 @@ export const saleItems = pgTable('sale_items', {
   returnedQty: integer('returned_qty').notNull().default(0),
 })
 
-export const payments = pgTable('payments', {
-  id: serial('id').primaryKey(),
+export const payments = sqliteTable('payments', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   saleId: integer('sale_id').notNull(),
   kind: text('kind').$type<'uang_muka' | 'penerimaan'>().notNull(),
   amount: integer('amount').notNull(),
   method: text('method').notNull().default('tunai'),
   note: text('note'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
 })
 
-export const saleReturns = pgTable('sale_returns', {
-  id: serial('id').primaryKey(),
+export const saleReturns = sqliteTable('sale_returns', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   saleId: integer('sale_id').notNull(),
   saleItemId: integer('sale_item_id').notNull(),
   productId: integer('product_id').notNull(),
   qty: integer('qty').notNull(),
   amount: integer('amount').notNull().default(0),
   reason: text('reason'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
 })
 
-export const salesTargets = pgTable('sales_targets', {
-  id: serial('id').primaryKey(),
+export const salesTargets = sqliteTable('sales_targets', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   period: text('period').notNull(),
   salespersonId: integer('salesperson_id'),
   amount: integer('amount').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
 })
 
-export const checkIns = pgTable('check_ins', {
-  id: serial('id').primaryKey(),
+export const checkIns = sqliteTable('check_ins', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   salespersonId: integer('salesperson_id').notNull(),
   customerId: integer('customer_id').notNull(),
   note: text('note'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: createdAt(),
 })
 
-export const gallonLoans = pgTable('gallon_loans', {
-  id: serial('id').primaryKey(),
+export const gallonLoans = sqliteTable('gallon_loans', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
   customerId: integer('customer_id').notNull(),
   qty: integer('qty').notNull(),
   returnedQty: integer('returned_qty').notNull().default(0),
   deposit: integer('deposit').notNull().default(0),
-  dueDate: date('due_date'),
+  dueDate: text('due_date'),
   note: text('note'),
-  borrowedAt: timestamp('borrowed_at', { withTimezone: true }).notNull().defaultNow(),
-  returnedAt: timestamp('returned_at', { withTimezone: true }),
+  borrowedAt: createdAt('borrowed_at'),
+  returnedAt: integer('returned_at', { mode: 'timestamp_ms' }),
 })
 
-export const settings = pgTable('settings', {
+export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
 })

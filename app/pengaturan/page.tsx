@@ -1,10 +1,11 @@
-import { Plus, X } from 'lucide-react'
-import { deleteCategory, saveCategory, saveGallonTotal } from '@/app/actions/customers'
+import Link from 'next/link'
+import { ArrowRight, FileCode2, KeyRound, Plus, X } from 'lucide-react'
 import { ActionButton } from '@/components/action-button'
 import { Field } from '@/components/fields'
 import { FormDialog } from '@/components/form-dialog'
 import { Empty, PageHeader, Section } from '@/components/page-header'
-import { getGallonSummary, listCategories } from '@/lib/queries'
+import { Button } from '@/components/ui/button'
+import { listCategories } from '@/lib/queries'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,7 @@ function CategoryList({ title, type, rows }: { title: string; type: 'pelanggan' 
           }
           triggerVariant="outline"
           triggerSize="xs"
-          action={saveCategory}
+          endpoint="/api/categories"
         >
           <input type="hidden" name="type" value={type} />
           <Field label="Nama kategori" name="name" required maxLength={60} />
@@ -40,7 +41,7 @@ function CategoryList({ title, type, rows }: { title: string; type: 'pelanggan' 
             <li key={c.id} className="flex items-center justify-between py-1.5">
               {c.name}
               <ActionButton
-                action={deleteCategory}
+                endpoint="/api/categories/:id"
                 fields={{ id: c.id }}
                 variant="ghost"
                 size="icon-sm"
@@ -58,33 +59,70 @@ function CategoryList({ title, type, rows }: { title: string; type: 'pelanggan' 
 }
 
 export default async function SettingsPage() {
-  const [cats, gallons] = await Promise.all([listCategories(), getGallonSummary()])
+  const cats = await listCategories()
 
   return (
     <>
-      <PageHeader title="Pengaturan" description="Kategori dan inventaris galon." />
+      <PageHeader title="Pengaturan" description="Kategori pelanggan & penjualan, serta keamanan akun admin." />
       <div className="grid gap-4 lg:grid-cols-2">
         <CategoryList title="Kategori pelanggan" type="pelanggan" rows={cats.filter((c) => c.type === 'pelanggan')} />
         <CategoryList title="Kategori penjualan" type="penjualan" rows={cats.filter((c) => c.type === 'penjualan')} />
         <Section
-          title="Inventaris galon"
+          title="Keamanan Admin"
           actions={
             <FormDialog
-              title="Total galon milik toko"
-              description={`${gallons.out} galon sedang dipinjam`}
-              trigger="Ubah"
+              title="Ganti Kata Sandi Admin"
+              description="Ubah kata sandi untuk masuk ke sistem admin."
+              trigger="Ganti Sandi"
               triggerVariant="outline"
               triggerSize="xs"
-              action={saveGallonTotal}
+              endpoint="/api/settings/password"
             >
-              <Field label="Total galon" name="gallonTotal" type="number" min={gallons.out} defaultValue={gallons.total} required />
+              <Field
+                label="Kata Sandi Saat Ini"
+                name="currentPassword"
+                type="password"
+                required
+                placeholder="••••••••"
+              />
+              <Field
+                label="Kata Sandi Baru"
+                name="newPassword"
+                type="password"
+                required
+                placeholder="Minimal 5 karakter"
+                minLength={5}
+              />
+              <Field
+                label="Konfirmasi Kata Sandi Baru"
+                name="confirmPassword"
+                type="password"
+                required
+                placeholder="Ulangi kata sandi baru"
+                minLength={5}
+              />
             </FormDialog>
           }
         >
-          <p className="text-sm text-muted-foreground">
-            Toko memiliki <span className="font-medium text-foreground tabular-nums">{gallons.total}</span> galon untuk
-            dipinjamkan.
-          </p>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <KeyRound className="size-4 text-primary" />
+            <span>Username: <strong className="text-foreground">admin</strong> (Sesi login berlaku 7 hari)</span>
+          </div>
+        </Section>
+
+        <Section
+          title="Faktur Pajak Coretax XML"
+          actions={
+            <Button size="xs" variant="outline" render={<Link href="/pajak" />} nativeButton={false}>
+              Buka Pajak
+              <ArrowRight className="size-3.5 ml-1" />
+            </Button>
+          }
+        >
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <FileCode2 className="size-4 text-primary" />
+            <span>Ekspor data penjualan ke XML format resmi DJP Coretax (&lt;TaxInvoiceBulk&gt;).</span>
+          </div>
         </Section>
       </div>
     </>

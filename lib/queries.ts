@@ -20,7 +20,7 @@ import { currentPeriod } from '@/lib/format'
 
 const invoicedStages: SaleStage[] = ['faktur', 'lunas']
 const inPeriod = (period: string) =>
-  sql`to_char(${sales.invoicedAt} at time zone 'Asia/Jakarta', 'YYYY-MM') = ${period}`
+  sql`strftime('%Y-%m', ${sales.invoicedAt} / 1000, 'unixepoch', '+7 hours') = ${period}`
 
 export async function listProducts() {
   return db.select().from(products).orderBy(asc(products.name))
@@ -35,13 +35,16 @@ export async function listCategories(type?: 'pelanggan' | 'penjualan') {
 }
 
 export async function listCustomers() {
-  const outstanding = sql<number>`coalesce((select sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}) from ${gallonLoans} where ${gallonLoans.customerId} = ${customers.id}), 0)::int`
+  const outstanding = sql<number>`coalesce((select sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}) from ${gallonLoans} where ${gallonLoans.customerId} = ${customers.id}), 0)`
   return db
     .select({
       id: customers.id,
       name: customers.name,
       phone: customers.phone,
       address: customers.address,
+      nik: customers.nik,
+      npwp: customers.npwp,
+      email: customers.email,
       categoryId: customers.categoryId,
       categoryName: categories.name,
       gallonsOut: outstanding,
@@ -106,13 +109,17 @@ export async function getSale(id: number) {
 
 export type NotaFilter = { from?: string; to?: string; customerId?: number }
 
-const jakartaDate = sql`(${sales.createdAt} at time zone 'Asia/Jakarta')::date`
+const jakartaDate = sql`date(${sales.createdAt} / 1000, 'unixepoch', '+7 hours')`
 
 export async function listNotas({ from, to, customerId }: NotaFilter) {
   const itemSummary = sql<string>`coalesce((
-    select string_agg(${products.name} || ' x' || ${saleItems.qty}, ', ' order by ${saleItems.id})
-    from ${saleItems} left join ${products} on ${products.id} = ${saleItems.productId}
-    where ${saleItems.saleId} = ${sales.id}
+    select group_concat(item_text, ', ')
+    from (
+      select ${products.name} || ' x' || ${saleItems.qty} as item_text
+      from ${saleItems} left join ${products} on ${products.id} = ${saleItems.productId}
+      where ${saleItems.saleId} = ${sales.id}
+      order by ${saleItems.id}
+    )
   ), '')`
   return db
     .select({
@@ -130,8 +137,8 @@ export async function listNotas({ from, to, customerId }: NotaFilter) {
     .leftJoin(customers, eq(customers.id, sales.customerId))
     .where(
       and(
-        from ? sql`${jakartaDate} >= ${from}::date` : undefined,
-        to ? sql`${jakartaDate} <= ${to}::date` : undefined,
+        from ? sql`${jakartaDate} >= date(${from})` : undefined,
+        to ? sql`${jakartaDate} <= date(${to})` : undefined,
         customerId ? eq(sales.customerId, customerId) : undefined,
       ),
     )
@@ -145,7 +152,7 @@ export async function getNotaForEdit(id: number) {
   const [items, [{ returnCount }]] = await Promise.all([
     db.select().from(saleItems).where(eq(saleItems.saleId, id)).orderBy(asc(saleItems.id)),
     db
-      .select({ returnCount: sql<number>`count(*)::int` })
+      .select({ returnCount: sql<number>`count(*)` })
       .from(saleReturns)
       .where(eq(saleReturns.saleId, id)),
   ])
@@ -156,7 +163,7 @@ export async function getGallonSummary() {
   const [[total], [{ out }]] = await Promise.all([
     db.select({ value: settings.value }).from(settings).where(eq(settings.key, 'gallon_total')),
     db
-      .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)::int` })
+      .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)` })
       .from(gallonLoans),
   ])
   const totalCount = Number(total?.value ?? 0)
@@ -169,7 +176,10 @@ export async function listGallonLoans(active: boolean) {
     .from(gallonLoans)
     .leftJoin(customers, eq(customers.id, gallonLoans.customerId))
     .where(active ? isNull(gallonLoans.returnedAt) : sql`${gallonLoans.returnedAt} is not null`)
-    .orderBy(active ? sql`${gallonLoans.dueDate} asc nulls last` : desc(gallonLoans.returnedAt))
+    .orderBy(
+      active ? asc(sql`case when ${gallonLoans.dueDate} is null then 1 else 0 end`) : desc(gallonLoans.returnedAt),
+      ...(active ? [asc(gallonLoans.dueDate)] : []),
+    )
     .limit(200)
 }
 
@@ -179,11 +189,11 @@ export async function getDashboard() {
   const [[month], [receivable], lowStock, gallons, dueLoans, recent, [target], [pending]] =
     await Promise.all([
       db
-        .select({ total: sql<number>`coalesce(sum(${sales.total}), 0)::int`, count: sql<number>`count(*)::int` })
+        .select({ total: sql<number>`coalesce(sum(${sales.total}), 0)`, count: sql<number>`count(*)` })
         .from(sales)
         .where(and(inArray(sales.stage, invoicedStages), inPeriod(period))),
       db
-        .select({ total: sql<number>`coalesce(sum(${sales.total} - ${sales.paid}), 0)::int` })
+        .select({ total: sql<number>`coalesce(sum(${sales.total} - ${sales.paid}), 0)` })
         .from(sales)
         .where(eq(sales.stage, 'faktur')),
       db
@@ -206,7 +216,7 @@ export async function getDashboard() {
         .from(salesTargets)
         .where(and(eq(salesTargets.period, period), isNull(salesTargets.salespersonId))),
       db
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: sql<number>`count(*)` })
         .from(sales)
         .where(inArray(sales.stage, ['pesanan', 'dikirim'])),
     ])
@@ -224,3 +234,110 @@ export async function getDashboard() {
     target: target?.amount ?? 0,
   }
 }
+
+export type TaxSalesFilter = {
+  from?: string
+  to?: string
+  stage?: SaleStage
+  saleIds?: number[]
+}
+
+export async function listTaxSales(filter: TaxSalesFilter = {}) {
+  const conditions = []
+  if (filter.stage) {
+    conditions.push(eq(sales.stage, filter.stage))
+  }
+  if (filter.from) {
+    const fromMs = new Date(`${filter.from}T00:00:00+07:00`).getTime()
+    conditions.push(sql`${sales.createdAt} >= ${fromMs}`)
+  }
+  if (filter.to) {
+    const toMs = new Date(`${filter.to}T23:59:59+07:00`).getTime()
+    conditions.push(sql`${sales.createdAt} <= ${toMs}`)
+  }
+  if (filter.saleIds && filter.saleIds.length > 0) {
+    conditions.push(inArray(sales.id, filter.saleIds))
+  }
+
+  const salesRows = await db
+    .select({
+      id: sales.id,
+      number: sales.number,
+      stage: sales.stage,
+      total: sales.total,
+      paid: sales.paid,
+      createdAt: sales.createdAt,
+      invoicedAt: sales.invoicedAt,
+      customer: {
+        name: customers.name,
+        address: customers.address,
+        nik: customers.nik,
+        npwp: customers.npwp,
+        email: customers.email,
+      },
+    })
+    .from(sales)
+    .innerJoin(customers, eq(customers.id, sales.customerId))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(sales.createdAt))
+    .limit(500)
+
+  if (salesRows.length === 0) return []
+
+  const ids = salesRows.map((s) => s.id)
+  const itemRows = await db
+    .select({
+      saleId: saleItems.saleId,
+      productId: saleItems.productId,
+      productName: products.name,
+      unit: products.unit,
+      qty: saleItems.qty,
+      price: saleItems.price,
+      discountPercent: saleItems.discountPercent,
+    })
+    .from(saleItems)
+    .leftJoin(products, eq(products.id, saleItems.productId))
+    .where(inArray(saleItems.saleId, ids))
+
+  const itemsBySale = new Map<
+    number,
+    Array<{
+      name: string
+      qty: number
+      price: number
+      discountPercent?: number
+      unit?: string
+    }>
+  >()
+
+  for (const item of itemRows) {
+    const list = itemsBySale.get(item.saleId) || []
+    list.push({
+      name: item.productName || 'Barang',
+      qty: item.qty,
+      price: item.price,
+      discountPercent: item.discountPercent,
+      unit: item.unit || 'UM.0018',
+    })
+    itemsBySale.set(item.saleId, list)
+  }
+
+  const jakartaDay = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+
+  return salesRows.map((s) => ({
+    id: s.id,
+    number: s.number,
+    stage: s.stage,
+    total: s.total,
+    paid: s.paid,
+    date: jakartaDay.format(new Date(s.invoicedAt || s.createdAt)),
+    customer: s.customer,
+    items: itemsBySale.get(s.id) || [],
+  }))
+}
+

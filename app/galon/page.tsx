@@ -1,6 +1,5 @@
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
-import { borrowGallon, returnGallon } from '@/app/actions/gallons'
+import { Plus, Settings2 } from 'lucide-react'
 import { Field, SelectField, TextareaField } from '@/components/fields'
 import { FormDialog } from '@/components/form-dialog'
 import { Empty, PageHeader, Stat } from '@/components/page-header'
@@ -26,33 +25,59 @@ export default async function GallonPage({ searchParams }: { searchParams: Promi
     <>
       <PageHeader
         title="Pinjam Galon"
-        description="Catat galon yang dipinjam pelanggan dan pengembaliannya."
+        description="Catat galon yang dipinjam pelanggan, pengembaliannya, dan kelola total stok galon toko."
         actions={
-          <FormDialog
-            title="Pinjamkan galon"
-            description={`${summary.available} galon tersedia`}
-            trigger={
-              <>
-                <Plus aria-hidden="true" />
-                Pinjamkan
-              </>
-            }
-            action={borrowGallon}
-          >
-            <SelectField
-              label="Pelanggan"
-              name="customerId"
-              placeholder="Pilih pelanggan"
-              options={customers.map((c) => ({ value: c.id, label: c.name }))}
-              required
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Jumlah galon" name="qty" type="number" min={1} max={Math.max(1, summary.available)} defaultValue={1} required />
-              <Field label="Jaminan (Rp)" name="deposit" type="number" min={0} defaultValue={0} />
-            </div>
-            <Field label="Tanggal kembali" name="dueDate" type="date" min={today} />
-            <TextareaField label="Catatan" name="note" maxLength={300} />
-          </FormDialog>
+          <div className="flex flex-wrap items-center gap-2">
+            <FormDialog
+              title="Atur total galon toko"
+              description={`${summary.out} galon sedang dipinjam pelanggan`}
+              trigger={
+                <>
+                  <Settings2 aria-hidden="true" className="size-4" />
+                  Atur Total Galon
+                </>
+              }
+              triggerVariant="outline"
+              triggerSize="sm"
+              endpoint="/api/settings/gallon-total"
+            >
+              <Field
+                label="Total galon milik toko"
+                name="gallonTotal"
+                type="number"
+                min={summary.out}
+                defaultValue={summary.total}
+                required
+              />
+            </FormDialog>
+
+            <FormDialog
+              title="Pinjamkan galon"
+              description={`${summary.available} galon tersedia`}
+              trigger={
+                <>
+                  <Plus aria-hidden="true" />
+                  Pinjamkan
+                </>
+              }
+              triggerSize="sm"
+              endpoint="/api/gallon-loans"
+            >
+              <SelectField
+                label="Pelanggan"
+                name="customerId"
+                placeholder="Pilih pelanggan"
+                options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                required
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Jumlah galon" name="qty" type="number" min={1} max={Math.max(1, summary.available)} defaultValue={1} required />
+                <Field label="Jaminan (Rp)" name="deposit" type="number" min={0} defaultValue={0} />
+              </div>
+              <Field label="Tanggal kembali" name="dueDate" type="date" min={today} />
+              <TextareaField label="Catatan" name="note" maxLength={300} />
+            </FormDialog>
+          </div>
         }
       />
 
@@ -136,7 +161,7 @@ export default async function GallonPage({ searchParams }: { searchParams: Promi
                           triggerVariant="outline"
                           triggerSize="xs"
                           submitLabel="Catat pengembalian"
-                          action={returnGallon}
+                          endpoint="/api/gallon-loans/:id/returns"
                         >
                           <input type="hidden" name="id" value={loan.id} />
                           <Field

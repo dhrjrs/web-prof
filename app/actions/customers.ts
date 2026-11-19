@@ -13,6 +13,9 @@ export async function saveCustomer(fd: FormData) {
       name: text(fd, 'name', { required: true })!,
       phone: text(fd, 'phone', { max: 30 }),
       address: text(fd, 'address', { max: 300 }),
+      nik: text(fd, 'nik', { max: 30 }),
+      npwp: text(fd, 'npwp', { max: 30 }),
+      email: text(fd, 'email', { max: 100 }),
       categoryId: int(fd, 'categoryId', { required: false, min: 1 }),
     }
     if (id) await db.update(customers).set(values).where(eq(customers.id, id))
@@ -27,14 +30,14 @@ export async function deleteCustomer(fd: FormData) {
     const id = int(fd, 'id', { min: 1 })!
     await db.transaction(async (tx) => {
       const [{ gallonsOut }] = await tx
-        .select({ gallonsOut: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)::int` })
+        .select({ gallonsOut: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)` })
         .from(gallonLoans)
         .where(eq(gallonLoans.customerId, id))
       if (gallonsOut > 0) {
         throw new ValidationError(`Pelanggan masih meminjam ${gallonsOut} galon. Catat pengembalian dulu.`)
       }
       const [{ notaCount }] = await tx
-        .select({ notaCount: sql<number>`count(*)::int` })
+        .select({ notaCount: sql<number>`count(*)` })
         .from(sales)
         .where(eq(sales.customerId, id))
       if (notaCount > 0) {
@@ -73,7 +76,7 @@ export async function saveGallonTotal(fd: FormData) {
   return run(async () => {
     const value = int(fd, 'gallonTotal', { max: 100_000, label: 'Total galon' })!
     const [{ out }] = await db
-      .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)::int` })
+      .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)` })
       .from(gallonLoans)
     if (value < out) throw new ValidationError(`Total tidak boleh kurang dari ${out} galon yang sedang dipinjam`)
     await db

@@ -1,12 +1,14 @@
 'use client'
 
 import { useTransition, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import type { ActionResult } from '@/lib/validation'
+import { submitApiAction } from '@/lib/api-client'
 
 type Props = {
-  action: (fd: FormData) => Promise<ActionResult>
+  endpoint: string
+  method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   fields: Record<string, string | number>
   children: ReactNode
   variant?: 'default' | 'outline' | 'ghost' | 'secondary' | 'destructive'
@@ -16,7 +18,8 @@ type Props = {
 }
 
 export function ActionButton({
-  action,
+  endpoint,
+  method = 'DELETE',
   fields,
   children,
   variant = 'default',
@@ -25,15 +28,18 @@ export function ActionButton({
   label,
 }: Props) {
   const [pending, startTransition] = useTransition()
+  const router = useRouter()
 
   function handleClick() {
     if (confirm && !window.confirm(confirm)) return
-    const fd = new FormData()
-    for (const [key, value] of Object.entries(fields)) fd.set(key, String(value))
     startTransition(async () => {
-      const result = await action(fd)
-      if (result.ok) toast.success(result.message)
-      else toast.error(result.error)
+      const result = await submitApiAction(endpoint, method, fields)
+      if (result.ok) {
+        toast.success(result.message)
+        router.refresh()
+      } else {
+        toast.error(result.error)
+      }
     })
   }
 

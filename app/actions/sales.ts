@@ -111,12 +111,12 @@ export async function updateSale(fd: FormData) {
 
     let number = ''
     await db.transaction(async (tx) => {
-      const [sale] = await tx.select().from(sales).where(eq(sales.id, id)).for('update')
+      const [sale] = await tx.select().from(sales).where(eq(sales.id, id))
       if (!sale) throw new ValidationError('Nota tidak ditemukan')
       number = sale.number
 
       const [{ returnCount }] = await tx
-        .select({ returnCount: sql<number>`count(*)::int` })
+        .select({ returnCount: sql<number>`count(*)` })
         .from(saleReturns)
         .where(eq(saleReturns.saleId, id))
       if (returnCount > 0) throw new ValidationError('Nota yang sudah ada retur tidak bisa diubah')
@@ -187,7 +187,7 @@ export async function deleteSale(fd: FormData) {
     const id = int(fd, 'id', { min: 1 })!
     let number = ''
     await db.transaction(async (tx) => {
-      const [sale] = await tx.select().from(sales).where(eq(sales.id, id)).for('update')
+      const [sale] = await tx.select().from(sales).where(eq(sales.id, id))
       if (!sale) throw new ValidationError('Nota tidak ditemukan')
       number = sale.number
 
@@ -229,7 +229,7 @@ export async function advanceSale(fd: FormData) {
     if (!allowedFrom) throw new ValidationError('Tahap tidak valid')
 
     await db.transaction(async (tx) => {
-      const [sale] = await tx.select().from(sales).where(eq(sales.id, id)).for('update')
+      const [sale] = await tx.select().from(sales).where(eq(sales.id, id))
       if (!sale) throw new ValidationError('Transaksi tidak ditemukan')
       if (!allowedFrom.includes(sale.stage)) throw new ValidationError('Tahap transaksi tidak sesuai')
 
@@ -269,7 +269,7 @@ export async function addPayment(fd: FormData) {
 
     let kind = 'penerimaan' as 'uang_muka' | 'penerimaan'
     await db.transaction(async (tx) => {
-      const [sale] = await tx.select().from(sales).where(eq(sales.id, saleId)).for('update')
+      const [sale] = await tx.select().from(sales).where(eq(sales.id, saleId))
       if (!sale) throw new ValidationError('Transaksi tidak ditemukan')
       if (sale.stage === 'pesanan' || sale.stage === 'dikirim') kind = 'uang_muka'
       else if (sale.stage !== 'faktur') throw new ValidationError('Pembayaran tidak bisa dicatat pada tahap ini')
@@ -296,9 +296,9 @@ export async function returnSaleItem(fd: FormData) {
     const qty = int(fd, 'qty', { min: 1, max: MAX_QTY_PER_PRODUCT, label: 'Jumlah retur' })!
 
     await db.transaction(async (tx) => {
-      const [item] = await tx.select().from(saleItems).where(eq(saleItems.id, saleItemId)).for('update')
+      const [item] = await tx.select().from(saleItems).where(eq(saleItems.id, saleItemId))
       if (!item) throw new ValidationError('Barang tidak ditemukan')
-      const [sale] = await tx.select().from(sales).where(eq(sales.id, item.saleId)).for('update')
+      const [sale] = await tx.select().from(sales).where(eq(sales.id, item.saleId))
       if (!sale || !['dikirim', 'faktur', 'lunas'].includes(sale.stage)) {
         throw new ValidationError('Retur hanya untuk barang yang sudah dikirim')
       }

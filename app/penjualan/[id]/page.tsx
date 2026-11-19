@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, Check, Undo2 } from 'lucide-react'
-import { addPayment, advanceSale, returnSaleItem } from '@/app/actions/sales'
 import { ActionButton } from '@/components/action-button'
 import { Field, SelectField } from '@/components/fields'
 import { FormDialog } from '@/components/form-dialog'
@@ -43,13 +42,14 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
         actions={
           <>
             {sale.stage === 'penawaran' ? (
-              <ActionButton action={advanceSale} fields={{ id: sale.id, to: 'pesanan' }}>
+              <ActionButton endpoint="/api/sales/:id/stage" method="POST" fields={{ id: sale.id, to: 'pesanan' }}>
                 Jadikan pesanan
               </ActionButton>
             ) : null}
             {sale.stage === 'pesanan' ? (
               <ActionButton
-                action={advanceSale}
+                endpoint="/api/sales/:id/stage"
+                method="POST"
                 fields={{ id: sale.id, to: 'dikirim' }}
                 confirm="Kirim pesanan? Stok akan dikurangi."
               >
@@ -57,7 +57,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
               </ActionButton>
             ) : null}
             {sale.stage === 'dikirim' ? (
-              <ActionButton action={advanceSale} fields={{ id: sale.id, to: 'faktur' }}>
+              <ActionButton endpoint="/api/sales/:id/stage" method="POST" fields={{ id: sale.id, to: 'faktur' }}>
                 Buat faktur
               </ActionButton>
             ) : null}
@@ -67,7 +67,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
                 description={`Sisa tagihan ${rupiah(remaining)}`}
                 trigger={sale.stage === 'faktur' ? 'Terima pembayaran' : 'Uang muka'}
                 triggerVariant="outline"
-                action={addPayment}
+                endpoint="/api/sales/:saleId/payments"
               >
                 <input type="hidden" name="saleId" value={sale.id} />
                 <Field label="Nominal (Rp)" name="amount" type="number" min={1} max={remaining} defaultValue={remaining} required />
@@ -84,7 +84,8 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
             ) : null}
             {sale.stage === 'penawaran' || sale.stage === 'pesanan' ? (
               <ActionButton
-                action={advanceSale}
+                endpoint="/api/sales/:id/stage"
+                method="POST"
                 fields={{ id: sale.id, to: 'batal' }}
                 variant="ghost"
                 confirm="Batalkan transaksi ini?"
@@ -170,7 +171,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
                           triggerVariant="ghost"
                           triggerSize="xs"
                           submitLabel="Catat retur"
-                          action={returnSaleItem}
+                          endpoint="/api/sale-items/:saleItemId/returns"
                         >
                           <input type="hidden" name="saleItemId" value={item.id} />
                           <Field label="Jumlah retur" name="qty" type="number" min={1} max={returnable} defaultValue={1} required />

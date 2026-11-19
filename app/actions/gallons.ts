@@ -17,13 +17,12 @@ export async function borrowGallon(fd: FormData) {
     }
 
     await db.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(4242)`)
       const [total] = await tx
         .select({ value: settings.value })
         .from(settings)
         .where(eq(settings.key, 'gallon_total'))
       const [{ out }] = await tx
-        .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)::int` })
+        .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)` })
         .from(gallonLoans)
       const available = Number(total?.value ?? 0) - out
       if (qty > available) throw new ValidationError(`Galon tersedia hanya ${available}`)
@@ -51,7 +50,7 @@ export async function returnGallon(fd: FormData) {
       .update(gallonLoans)
       .set({
         returnedQty: sql`${gallonLoans.returnedQty} + ${qty}`,
-        returnedAt: sql`case when ${gallonLoans.returnedQty} + ${qty} >= ${gallonLoans.qty} then now() else null end`,
+        returnedAt: sql`case when ${gallonLoans.returnedQty} + ${qty} >= ${gallonLoans.qty} then cast(strftime('%s', 'now') as integer) * 1000 else null end`,
       })
       .where(sql`${gallonLoans.id} = ${id} and ${gallonLoans.returnedQty} + ${qty} <= ${gallonLoans.qty}`)
       .returning({ id: gallonLoans.id })

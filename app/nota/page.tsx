@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { Eye, Pencil, Trash2 } from 'lucide-react'
-import { deleteSale } from '@/app/actions/sales'
 import { ActionButton } from '@/components/action-button'
 import { NotaFilters } from '@/components/nota-filters'
 import { Empty, PageHeader, Stat } from '@/components/page-header'
@@ -93,7 +92,7 @@ export default async function NotaPage({
                         <span className="sr-only">Ubah nota {n.number}</span>
                       </Button>
                       <ActionButton
-                        action={deleteSale}
+                        endpoint="/api/sales/:id"
                         fields={{ id: n.id }}
                         variant="ghost"
                         size="xs"

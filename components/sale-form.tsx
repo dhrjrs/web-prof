@@ -4,12 +4,12 @@ import { useActionState, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { createSale, updateSale } from '@/app/actions/sales'
 import { Field, NativeSelect, SelectField, TextareaField } from '@/components/fields'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { netPrice, rupiah } from '@/lib/format'
+import { submitFormApiAction } from '@/lib/api-client'
 import type { ActionResult } from '@/lib/validation'
 
 type Product = { id: number; name: string; unit: string; price: number; discountPercent: number; stock: number }
@@ -47,7 +47,7 @@ export function SaleForm({
   const [discount, setDiscount] = useState(String(initial?.discount ?? 0))
 
   const [state, formAction, pending] = useActionState<ActionResult, FormData>(async (_prev, fd) => {
-    const result = await (isEdit ? updateSale(fd) : createSale(fd))
+    const result = await submitFormApiAction(isEdit ? '/api/sales/:id' : '/api/sales', isEdit ? 'PUT' : 'POST', fd)
     if (result.ok) {
       toast.success(result.message)
       router.push(isEdit ? '/nota' : '/penjualan')
