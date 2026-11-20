@@ -1,5 +1,8 @@
 const SESSION_COOKIE_NAME = 'admin_session'
-const SECRET = process.env.ADMIN_SECRET || 'web-prof-secret-session-key-2026'
+const SECRET =
+  process.env.ADMIN_SECRET ??
+  (process.env.NODE_ENV === 'production' ? process.env.DATABASE_URL : undefined) ??
+  'web-prof-development-only-session-key'
 
 async function getHmacKey(secret: string): Promise<CryptoKey> {
   const enc = new TextEncoder()

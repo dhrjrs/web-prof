@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, asc, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import {
   categories,
@@ -21,7 +21,7 @@ import { currentPeriod } from '@/lib/format'
 
 const invoicedStages: SaleStage[] = ['faktur', 'lunas']
 const inPeriod = (period: string) =>
-  sql`strftime('%Y-%m', ${sales.invoicedAt} / 1000, 'unixepoch', '+7 hours') = ${period}`
+  sql`to_char(${sales.invoicedAt} AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM') = ${period}`
 
 export async function listProducts() {
   return db.select().from(products).orderBy(asc(products.name))
@@ -36,7 +36,7 @@ export async function listCategories(type?: 'pelanggan' | 'penjualan') {
 }
 
 export async function listCustomers() {
-  const outstanding = sql<number>`coalesce((select sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}) from ${gallonLoans} where ${gallonLoans.customerId} = ${customers.id}), 0)`
+  const outstanding = sql<number>`coalesce((select sum(${gallonLoans.qty} - ${gallonLoans.returnedQty})::int from ${gallonLoans} where ${gallonLoans.customerId} = ${customers.id}), 0)::int`
   return db
     .select({
       id: customers.id,
@@ -110,17 +110,16 @@ export async function getSale(id: number) {
 
 export type NotaFilter = { from?: string; to?: string; customerId?: number }
 
-const jakartaDate = sql`date(${sales.createdAt} / 1000, 'unixepoch', '+7 hours')`
+const jakartaDate = sql`(${sales.createdAt} AT TIME ZONE 'Asia/Jakarta')::date`
 
 export async function listNotas({ from, to, customerId }: NotaFilter) {
   const itemSummary = sql<string>`coalesce((
-    select group_concat(item_text, ', ')
+    select string_agg(item_text, ', ' order by item_id)
     from (
-      select ${products.name} || ' x' || ${saleItems.qty} as item_text
+      select ${products.name} || ' x' || ${saleItems.qty} as item_text, ${saleItems.id} as item_id
       from ${saleItems} left join ${products} on ${products.id} = ${saleItems.productId}
       where ${saleItems.saleId} = ${sales.id}
-      order by ${saleItems.id}
-    )
+    ) item_rows
   ), '')`
   return db
     .select({
@@ -138,8 +137,8 @@ export async function listNotas({ from, to, customerId }: NotaFilter) {
     .leftJoin(customers, eq(customers.id, sales.customerId))
     .where(
       and(
-        from ? sql`${jakartaDate} >= date(${from})` : undefined,
-        to ? sql`${jakartaDate} <= date(${to})` : undefined,
+        from ? sql`${jakartaDate} >= ${from}::date` : undefined,
+        to ? sql`${jakartaDate} <= ${to}::date` : undefined,
         customerId ? eq(sales.customerId, customerId) : undefined,
       ),
     )
@@ -153,7 +152,7 @@ export async function getNotaForEdit(id: number) {
   const [items, [{ returnCount }]] = await Promise.all([
     db.select().from(saleItems).where(eq(saleItems.saleId, id)).orderBy(asc(saleItems.id)),
     db
-      .select({ returnCount: sql<number>`count(*)` })
+      .select({ returnCount: sql<number>`count(*)::int` })
       .from(saleReturns)
       .where(eq(saleReturns.saleId, id)),
   ])
@@ -164,7 +163,7 @@ export async function getGallonSummary() {
   const [[total], [{ out }]] = await Promise.all([
     db.select({ value: settings.value }).from(settings).where(eq(settings.key, 'gallon_total')),
     db
-      .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)` })
+      .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)::int` })
       .from(gallonLoans),
   ])
   const totalCount = Number(total?.value ?? 0)
@@ -217,11 +216,11 @@ export async function getDashboard() {
   const [[month], [receivable], lowStock, gallons, dueLoans, recent, [target], [pending]] =
     await Promise.all([
       db
-        .select({ total: sql<number>`coalesce(sum(${sales.total}), 0)`, count: sql<number>`count(*)` })
+        .select({ total: sql<number>`coalesce(sum(${sales.total}), 0)::int`, count: sql<number>`count(*)::int` })
         .from(sales)
         .where(and(inArray(sales.stage, invoicedStages), inPeriod(period))),
       db
-        .select({ total: sql<number>`coalesce(sum(${sales.total} - ${sales.paid}), 0)` })
+        .select({ total: sql<number>`coalesce(sum(${sales.total} - ${sales.paid}), 0)::int` })
         .from(sales)
         .where(eq(sales.stage, 'faktur')),
       db
@@ -244,7 +243,7 @@ export async function getDashboard() {
         .from(salesTargets)
         .where(and(eq(salesTargets.period, period), isNull(salesTargets.salespersonId))),
       db
-        .select({ count: sql<number>`count(*)` })
+        .select({ count: sql<number>`count(*)::int` })
         .from(sales)
         .where(inArray(sales.stage, ['pesanan', 'dikirim'])),
     ])
@@ -277,11 +276,11 @@ export async function listTaxSales(filter: TaxSalesFilter = {}) {
   }
   if (filter.from) {
     const fromMs = new Date(`${filter.from}T00:00:00+07:00`).getTime()
-    conditions.push(sql`${sales.createdAt} >= ${fromMs}`)
+    conditions.push(gte(sales.createdAt, new Date(fromMs)))
   }
   if (filter.to) {
     const toMs = new Date(`${filter.to}T23:59:59+07:00`).getTime()
-    conditions.push(sql`${sales.createdAt} <= ${toMs}`)
+    conditions.push(lte(sales.createdAt, new Date(toMs)))
   }
   if (filter.saleIds && filter.saleIds.length > 0) {
     conditions.push(inArray(sales.id, filter.saleIds))

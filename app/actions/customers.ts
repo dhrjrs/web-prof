@@ -30,14 +30,14 @@ export async function deleteCustomer(fd: FormData) {
     const id = int(fd, 'id', { min: 1 })!
     await db.transaction(async (tx) => {
       const [{ gallonsOut }] = await tx
-        .select({ gallonsOut: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)` })
+        .select({ gallonsOut: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)::int` })
         .from(gallonLoans)
         .where(eq(gallonLoans.customerId, id))
       if (gallonsOut > 0) {
         throw new ValidationError(`Pelanggan masih meminjam ${gallonsOut} galon. Catat pengembalian dulu.`)
       }
       const [{ notaCount }] = await tx
-        .select({ notaCount: sql<number>`count(*)` })
+        .select({ notaCount: sql<number>`count(*)::int` })
         .from(sales)
         .where(eq(sales.customerId, id))
       if (notaCount > 0) {
@@ -76,7 +76,7 @@ export async function saveGallonTotal(fd: FormData) {
   return run(async () => {
     const value = int(fd, 'gallonTotal', { max: 100_000, label: 'Total galon' })!
     const [{ out }] = await db
-      .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)` })
+      .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)::int` })
       .from(gallonLoans)
     if (value < out) throw new ValidationError(`Total tidak boleh kurang dari ${out} galon yang sedang dipinjam`)
     await db
