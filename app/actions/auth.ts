@@ -11,6 +11,8 @@ import type { ActionResult } from '@/lib/validation'
 export async function loginAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const username = String(formData.get('username') || '').trim()
   const password = String(formData.get('password') || '').trim()
+  const requestedPath = String(formData.get('redirectTo') || '/')
+  const redirectTo = requestedPath.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/'
 
   if (!username || !password) {
     return { ok: false, error: 'Username dan kata sandi wajib diisi' }
@@ -43,7 +45,7 @@ export async function loginAction(_prev: ActionResult, formData: FormData): Prom
     maxAge: 7 * 24 * 60 * 60, // 7 days
   })
 
-  return { ok: true, message: 'Login berhasil' }
+  redirect(redirectTo)
 }
 
 export async function logoutAction() {

@@ -22,7 +22,7 @@ export async function borrowGallon(fd: FormData) {
         .from(settings)
         .where(eq(settings.key, 'gallon_total'))
       const [{ out }] = await tx
-        .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)` })
+        .select({ out: sql<number>`coalesce(sum(${gallonLoans.qty} - ${gallonLoans.returnedQty}), 0)::int` })
         .from(gallonLoans)
       const available = Number(total?.value ?? 0) - out
       if (qty > available) throw new ValidationError(`Galon tersedia hanya ${available}`)

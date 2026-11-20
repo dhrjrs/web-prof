@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useActionState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { Lock, LogIn, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { loginAction } from '@/app/actions/auth'
@@ -11,20 +11,13 @@ import { Label } from '@/components/ui/label'
 import type { ActionResult } from '@/lib/validation'
 
 function LoginForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const from = searchParams.get('from') || '/'
 
   const [state, formAction, isPending] = useActionState<ActionResult, FormData>(
     async (prev, formData) => {
       const res = await loginAction(prev, formData)
-      if (res.ok) {
-        toast.success(res.message || 'Login berhasil')
-        router.push(from)
-        router.refresh()
-      } else if (res.error) {
-        toast.error(res.error)
-      }
+      if (res.error) toast.error(res.error)
       return res
     },
     {},
@@ -32,6 +25,7 @@ function LoginForm() {
 
   return (
     <form action={formAction} className="space-y-4">
+      <input type="hidden" name="redirectTo" value={from} />
       <div className="space-y-1.5">
         <Label htmlFor="username">Username Admin</Label>
         <div className="relative">

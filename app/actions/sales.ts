@@ -116,7 +116,7 @@ export async function updateSale(fd: FormData) {
       number = sale.number
 
       const [{ returnCount }] = await tx
-        .select({ returnCount: sql<number>`count(*)` })
+        .select({ returnCount: sql<number>`count(*)::int` })
         .from(saleReturns)
         .where(eq(saleReturns.saleId, id))
       if (returnCount > 0) throw new ValidationError('Nota yang sudah ada retur tidak bisa diubah')
