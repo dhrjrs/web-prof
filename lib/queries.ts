@@ -6,6 +6,7 @@ import {
   categories,
   customers,
   gallonLoans,
+  gallonReturns,
   payments,
   products,
   saleItems,
@@ -175,12 +176,39 @@ export async function listGallonLoans(active: boolean) {
     .select({ loan: gallonLoans, customerName: customers.name, customerPhone: customers.phone })
     .from(gallonLoans)
     .leftJoin(customers, eq(customers.id, gallonLoans.customerId))
-    .where(active ? isNull(gallonLoans.returnedAt) : sql`${gallonLoans.returnedAt} is not null`)
+    .where(
+      active
+        ? sql`${gallonLoans.returnedQty} < ${gallonLoans.qty}`
+        : sql`${gallonLoans.returnedQty} > 0`,
+    )
     .orderBy(
       active ? asc(sql`case when ${gallonLoans.dueDate} is null then 1 else 0 end`) : desc(gallonLoans.returnedAt),
       ...(active ? [asc(gallonLoans.dueDate)] : []),
     )
     .limit(200)
+}
+
+export async function listGallonReturns() {
+  return db
+    .select({
+      id: gallonReturns.id,
+      loanId: gallonReturns.loanId,
+      customerId: gallonReturns.customerId,
+      qty: gallonReturns.qty,
+      note: gallonReturns.note,
+      returnedAt: gallonReturns.returnedAt,
+      customerName: customers.name,
+      customerPhone: customers.phone,
+      totalLoanQty: gallonLoans.qty,
+      currentReturnedQty: gallonLoans.returnedQty,
+      borrowedAt: gallonLoans.borrowedAt,
+      deposit: gallonLoans.deposit,
+    })
+    .from(gallonReturns)
+    .leftJoin(gallonLoans, eq(gallonLoans.id, gallonReturns.loanId))
+    .leftJoin(customers, eq(customers.id, gallonReturns.customerId))
+    .orderBy(desc(gallonReturns.returnedAt))
+    .limit(300)
 }
 
 export async function getDashboard() {
@@ -207,7 +235,7 @@ export async function getDashboard() {
         .select({ loan: gallonLoans, customerName: customers.name })
         .from(gallonLoans)
         .leftJoin(customers, eq(customers.id, gallonLoans.customerId))
-        .where(and(isNull(gallonLoans.returnedAt), lte(gallonLoans.dueDate, today)))
+        .where(and(sql`${gallonLoans.returnedQty} < ${gallonLoans.qty}`, lte(gallonLoans.dueDate, today)))
         .orderBy(asc(gallonLoans.dueDate))
         .limit(6),
       listSales().then((rows) => rows.slice(0, 6)),

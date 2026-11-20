@@ -2,7 +2,7 @@
 
 import { Suspense, useActionState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Droplets, Lock, LogIn, User } from 'lucide-react'
+import { Lock, LogIn, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { loginAction } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
@@ -90,10 +90,8 @@ export default function LoginPage() {
     <div className="flex min-h-dvh w-full items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-            <Droplets className="size-6" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">web-prof</h1>
+          <img src="/logo.png" alt="PROF Air Murni" className="h-20 w-auto object-contain" />
+          <h1 className="text-2xl font-bold tracking-tight">PROF Air Murni</h1>
           <p className="text-sm text-muted-foreground">
             Masuk untuk mengakses sistem stok dan penjualan toko
           </p>

@@ -3,7 +3,7 @@
 import { eq, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/lib/db'
-import { gallonLoans, settings } from '@/lib/db/schema'
+import { gallonLoans, gallonReturns, settings } from '@/lib/db/schema'
 import { int, run, text, ValidationError } from '@/lib/validation'
 
 export async function borrowGallon(fd: FormData) {
@@ -45,16 +45,44 @@ export async function returnGallon(fd: FormData) {
   return run(async () => {
     const id = int(fd, 'id', { min: 1 })!
     const qty = int(fd, 'qty', { min: 1, max: 1000, label: 'Jumlah kembali' })!
+    const note = text(fd, 'note', { max: 300 })
 
-    const updated = await db
-      .update(gallonLoans)
-      .set({
-        returnedQty: sql`${gallonLoans.returnedQty} + ${qty}`,
-        returnedAt: sql`case when ${gallonLoans.returnedQty} + ${qty} >= ${gallonLoans.qty} then cast(strftime('%s', 'now') as integer) * 1000 else null end`,
+    await db.transaction(async (tx) => {
+      const [loan] = await tx
+        .select({
+          id: gallonLoans.id,
+          customerId: gallonLoans.customerId,
+          qty: gallonLoans.qty,
+          returnedQty: gallonLoans.returnedQty,
+        })
+        .from(gallonLoans)
+        .where(eq(gallonLoans.id, id))
+
+      if (!loan) throw new ValidationError('Data pinjaman galon tidak ditemukan')
+      const remaining = loan.qty - loan.returnedQty
+      if (qty > remaining) {
+        throw new ValidationError(`Jumlah melebihi sisa galon yang dipinjam (${remaining} galon)`)
+      }
+
+      const newReturnedQty = loan.returnedQty + qty
+      const isFullyReturned = newReturnedQty >= loan.qty
+
+      await tx
+        .update(gallonLoans)
+        .set({
+          returnedQty: newReturnedQty,
+          returnedAt: isFullyReturned ? new Date() : null,
+        })
+        .where(eq(gallonLoans.id, id))
+
+      // Catat log setiap kejadian pengembalian (walaupun sebagian)
+      await tx.insert(gallonReturns).values({
+        loanId: id,
+        customerId: loan.customerId,
+        qty,
+        note,
       })
-      .where(sql`${gallonLoans.id} = ${id} and ${gallonLoans.returnedQty} + ${qty} <= ${gallonLoans.qty}`)
-      .returning({ id: gallonLoans.id })
-    if (updated.length === 0) throw new ValidationError('Jumlah melebihi galon yang dipinjam')
+    })
 
     revalidatePath('/', 'layout')
     return `${qty} galon dikembalikan`

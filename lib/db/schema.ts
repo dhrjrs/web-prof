@@ -123,6 +123,15 @@ export const gallonLoans = sqliteTable('gallon_loans', {
   returnedAt: integer('returned_at', { mode: 'timestamp_ms' }),
 })
 
+export const gallonReturns = sqliteTable('gallon_returns', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  loanId: integer('loan_id').notNull(),
+  customerId: integer('customer_id').notNull(),
+  qty: integer('qty').notNull(),
+  note: text('note'),
+  returnedAt: createdAt('returned_at'),
+})
+
 export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),

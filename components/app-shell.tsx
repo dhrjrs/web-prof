@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { Droplets, LogOut, ShieldCheck } from 'lucide-react'
+import { LogOut, ShieldCheck } from 'lucide-react'
 import { logoutAction } from '@/app/actions/auth'
 import { AppNav } from '@/components/app-nav'
 import { Button } from '@/components/ui/button'
@@ -17,11 +17,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-dvh flex-col md:flex-row">
       <aside className="flex flex-col justify-between gap-4 border-b p-3 md:sticky md:top-0 md:h-dvh md:w-56 md:shrink-0 md:border-r md:border-b-0 md:p-4">
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 px-2">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Droplets className="size-4" aria-hidden="true" />
-            </span>
-            <span className="font-semibold tracking-tight">web-prof</span>
+          <div className="flex items-center px-2">
+            <img src="/logo.png" alt="PROF Air Murni" className="h-10 w-auto object-contain" />
           </div>
           <AppNav />
         </div>

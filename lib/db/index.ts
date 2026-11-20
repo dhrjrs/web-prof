@@ -134,6 +134,14 @@ if (Number(existingTables.rows[0]?.count ?? 0) < 12) {
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS gallon_returns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loan_id INTEGER NOT NULL,
+    customer_id INTEGER NOT NULL,
+    qty INTEGER NOT NULL,
+    note TEXT,
+    returned_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER) * 1000)
+  );
   INSERT OR IGNORE INTO settings (key, value) VALUES ('gallon_total', '0');
   INSERT OR IGNORE INTO settings (key, value) VALUES ('tax_seller_tin', '0761268432731000');
   INSERT OR IGNORE INTO settings (key, value) VALUES ('tax_seller_idtku', '0761268432731000000000');
@@ -153,4 +161,26 @@ for (const col of ['nik TEXT', 'npwp TEXT', 'email TEXT']) {
     // column already exists
   }
 }
+
+// Ensure gallon_returns table exists
+await client.execute(`
+  CREATE TABLE IF NOT EXISTS gallon_returns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    loan_id INTEGER NOT NULL,
+    customer_id INTEGER NOT NULL,
+    qty INTEGER NOT NULL,
+    note TEXT,
+    returned_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER) * 1000)
+  );
+`)
+
+// Backfill any previous returns into gallon_returns if not already present
+await client.execute(`
+  INSERT INTO gallon_returns (loan_id, customer_id, qty, returned_at)
+  SELECT id, customer_id, returned_qty, coalesce(returned_at, borrowed_at)
+  FROM gallon_loans
+  WHERE returned_qty > 0 AND NOT EXISTS (
+    SELECT 1 FROM gallon_returns WHERE gallon_returns.loan_id = gallon_loans.id
+  );
+`)
 
